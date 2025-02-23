@@ -10,23 +10,30 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { BadgeInfo, Lock, PlayCircle } from "lucide-react";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import ReactPlayer from "react-player";
 import { useNavigate, useParams } from "react-router-dom";
 
 const CourseDetail = () => {
   const params = useParams();
   const courseId = params.courseId;
-  console.log("courseId----------->>>", courseId);
+  const [FreeVideosDetails, setFreeVideosDetails] = useState(null);
   const navigate = useNavigate();
 
   const { data, isLoading, refetch, isError } =
     useGetCourseDetailWithStatusQuery(courseId);
 
-  if (isLoading) return <h1>Loading...</h1>;
-  if (isError) return <h>Failed to load course details</h>;
+  const course = data?.course; // Ensure data exists before accessing course
+  const purchased = data?.purchased; // Check if the course is purchased
 
-  const { course } = data;
+  useEffect(() => {
+    if (course?.lectures?.length > 0) {
+      setFreeVideosDetails(course.lectures[0]);
+    }
+  }, [course]);
+
+  if (isLoading) return <h1>Loading...</h1>;
+  if (isError || !course) return <h1>Failed to load course details</h1>;
 
   const handleContinueCourse = () => {
     if (purchased) {
@@ -45,72 +52,129 @@ const CourseDetail = () => {
           <p>
             Created By{" "}
             <span className="text-[#C0C4FC] underline italic">
-              {course?.creator.name}
+              {course?.creator?.name}
             </span>
           </p>
           <div className="flex items-center gap-2 text-sm">
             <BadgeInfo size={16} />
-            <p>Last updated {course?.createdAt.split("T")[0]}</p>
+            <p>Last updated {course?.createdAt?.split("T")[0]}</p>
           </div>
-          <p>Students enrolled: {course?.enrolledStudents?.length}</p>
+          <p>Students enrolled: {course?.enrolledStudents?.length || 0}</p>
         </div>
       </div>
-      <div className="max-w-7xl mx-auto my-5 px-4 md:px-8 flex flex-col lg:flex-row justify-between gap-10">
-        <div className="w-full lg:w-1/2 space-y-5">
-          <h1 className="font-bold text-xl md:text-2xl">Description</h1>
-          <p
-            className="text-sm"
-            dangerouslySetInnerHTML={{ __html: course.description }}
-          />
-          <Card>
-            <CardHeader>
-              <CardTitle>Course Content</CardTitle>
-              <CardDescription>4 lectures</CardDescription>
+      <div className="max-w-7xl mx-auto mb-12 my-5 px-4 md:px-8 flex flex-col lg:flex-row justify-between gap-10">
+        <div className="w-full lg:w-3/4 space-y-6">
+          {/* Course Description Section */}
+          <div className="bg-white shadow-md rounded-xl p-6">
+            <h1 className="font-bold text-xl md:text-2xl text-gray-900">
+              Description
+            </h1>
+            <p
+              className="text-gray-700 text-sm leading-relaxed mt-2"
+              dangerouslySetInnerHTML={{
+                __html: course?.description || "No description available.",
+              }}
+            />
+          </div>
+
+          {/* Course Content Section */}
+          <Card className="shadow-lg  rounded-xl overflow-hidden bg-white">
+            <CardHeader className="bg-[#f9fafb] p-5 rounded-t-xl border-b">
+              <CardTitle className="text-lg md:text-xl font-semibold text-gray-900">
+                Course Content
+              </CardTitle>
+              <CardDescription className="text-gray-600">
+                <span className="font-bold text-gray-800">
+                  {course?.lectures?.length || 0}
+                </span>
+                lectures
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {course.lectures.map((lecture, idx) => (
-                <div key={idx} className="flex items-center gap-3 text-sm">
-                  <span>
-                    {idx === 0 || idx === 1 ? (
-                      <PlayCircle size={14} />
+
+            <CardContent className="space-y-3 p-5">
+              {course?.lectures?.map((lecture, idx) => (
+                <div
+                  key={idx}
+                  className={`flex items-center gap-3 text-sm p-3 rounded-md border hover:bg-gray-100 transition-all ${
+                    lecture.isPreviewFree
+                      ? "cursor-pointer"
+                      : "cursor-not-allowed"
+                  }`}
+                  onClick={() => {
+                    if (lecture.isPreviewFree) {
+                      setFreeVideosDetails(lecture);
+                    }
+                  }}
+                >
+                  <span className="text-gray-600">
+                    {lecture?.isPreviewFree ? (
+                      <PlayCircle size={18} className="text-green-600" />
                     ) : (
-                      <Lock size={14} />
+                      <Lock size={18} className="text-gray-500" />
                     )}
                   </span>
-                  <p>{lecture.lectureTitle}</p>
+                  <p className="text-gray-800 font-medium">
+                    {lecture?.lectureTitle}
+                  </p>
                 </div>
               ))}
             </CardContent>
           </Card>
         </div>
-        <div className="w-full lg:w-1/3">
-          <Card>
-            <CardContent className="p-4 flex flex-col">
-              <div className="w-full aspect-video mb-4">
-                <ReactPlayer
-                  width="100%"
-                  height={"100%"}
-                  url={course.lectures[0].videoUrl}
-                  controls={true}
-                />
+
+        <div className="w-full lg:w-1/3 ">
+          <Card className="shadow-lg rounded-xl overflow-hidden bg-white">
+            <CardContent className="p-5 flex flex-col">
+              <div className="w-full aspect-video rounded-lg overflow-hidden bg-black relative">
+                {FreeVideosDetails?.videoUrl ? (
+                  <ReactPlayer
+                    width="100%"
+                    height="100%"
+                    url={FreeVideosDetails?.videoUrl}
+                    controls={true}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-300">
+                    No preview available
+                  </div>
+                )}
               </div>
-              <h1>Lecture title</h1>
-              <Separator className="my-2" />
-              <div className="flex justify-between">
-                <h1 className="text-lg md:text-xl font-semibold">
+
+              <div className="mt-4">
+                <h1 className="text-lg font-semibold text-gray-800">
+                  Lecture Title
+                </h1>
+                <p className="text-gray-600 text-sm">
+                  {FreeVideosDetails?.lectureTitle ||
+                    "No free lectures available"}
+                </p>
+              </div>
+
+              <Separator className="my-4" />
+
+              <div className="flex justify-between items-center">
+                <h1 className="text-lg font-semibold text-gray-800">
                   Course Price
                 </h1>
-                <h1 className="text-lg md:text-xl font-semibold">
-                  ₹{course.coursePrice}
+                <h1 className="text-lg font-bold text-[#E0610A]">
+                  ₹{course?.coursePrice || "N/A"}
                 </h1>
               </div>
             </CardContent>
+
             <CardFooter className="flex justify-center p-4">
-              {/* {purchased ? (
-                <Button onClick={handleContinueCourse} className="w-full">Continue Course</Button>
+              {purchased ? (
+                <Button
+                  onClick={handleContinueCourse}
+                  className="w-full bg-gradient-to-r from-[#E0610A] to-orange-600 text-white font-semibold py-2 px-4 rounded-lg hover:shadow-lg transition-all"
+                >
+                  Continue Course
+                </Button>
               ) : (
-            )} */}
-              <Button> Buy Courses</Button>
+                <Button className="w-full bg-gradient-to-r from-[#E0610A] to-orange-600 text-white font-semibold py-2 px-4 rounded-lg hover:shadow-lg transition-all">
+                  Buy Course
+                </Button>
+              )}
             </CardFooter>
           </Card>
         </div>

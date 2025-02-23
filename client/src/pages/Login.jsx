@@ -138,6 +138,11 @@ function Login() {
                   required
                   placeholder="Eg. xyz"
                   onChange={(e) => changeInputHandler(e, "signup")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSubmit("signup");
+                    }
+                  }}
                 />
               </div>
             </CardContent>
@@ -182,6 +187,11 @@ function Login() {
                 <Label htmlFor="password">Password</Label>
                 <Input
                   onChange={(e) => changeInputHandler(e, "login")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSubmit("logn");
+                    }
+                  }}
                   name="password"
                   value={loginInput.password}
                   id="password"

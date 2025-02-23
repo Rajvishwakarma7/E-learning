@@ -22,28 +22,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import apiservice from "@/service/Server";
 import { Label } from "@radix-ui/react-label";
 import { Loader2 } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 function CourseTab() {
   const { courseId } = useParams();
   const navigate = useNavigate();
-  const [previewThumbnail, setPreviewThumbnail] = useState(null);
-  const [publishCourse, { isLoading: publishLoading }] =
-    usePublishCourseMutation();
-
-  const [editCourse, { data, isLoading, isError, error, isSuccess }] =
-    useEditCourseMutation();
-
-  const {
-    data: courseByIdData,
-    isLoading: courseByIdLoading,
-    refetch,
-  } = useGetCourseByIdQuery(courseId);
-
   const [input, setInput] = useState({
     courseTitle: "",
     subTitle: "",
@@ -53,6 +41,15 @@ function CourseTab() {
     coursePrice: "",
     courseThumbnail: "",
   });
+  const [previewThumbnail, setPreviewThumbnail] = useState(null);
+  const [publishCourse, { isLoading: publishLoading }] =
+    usePublishCourseMutation();
+
+  const [editCourse, { data, isLoading, isError, error, isSuccess }] =
+    useEditCourseMutation();
+
+  const [courseByIdLoading, setCourseByIdLoading] = useState(false);
+  const [course, setCourse] = useState(null);
 
   // Handlers for inputs
   const handleInputChange = (e) => {
@@ -95,22 +92,38 @@ function CourseTab() {
     }
   };
 
-  // Update state when courseByIdData changes
-  const course = courseByIdData?.course;
-  useEffect(() => {
-    if (courseByIdData?.course) {
-      setInput({
-        courseTitle: course.title,
-        subTitle: course.subTitle,
-        description: course.description,
-        category: course.category,
-        courseLevel: course.courseLevel,
-        coursePrice: course.coursePrice,
-        courseThumbnail: "",
-      });
-    }
-  }, [course]);
   // Show toast notifications for success and error
+
+  async function getCourseData() {
+    setCourseByIdLoading(true);
+    try {
+      const courseData = await apiservice.get(
+        `/getcoursebyid?courseId=${courseId}`
+      );
+      if (courseData.status === 200) {
+        let courseDataDetails = courseData.data.course;
+        setCourse(courseDataDetails);
+        setInput({
+          courseTitle: courseDataDetails.title || "",
+          subTitle: courseDataDetails.subTitle || "",
+          description: courseDataDetails.description || "",
+          category: courseDataDetails.category || "",
+          courseLevel: courseDataDetails.courseLevel || "",
+          coursePrice: courseDataDetails.coursePrice || "",
+        });
+        setCourseByIdLoading(false);
+      } else {
+        setCourseByIdLoading(false);
+      }
+    } catch (error) {
+      setCourseByIdLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    getCourseData();
+  }, []);
+
   useEffect(() => {
     if (isSuccess) {
       toast.success(data.message || "Course updated successfully!");
@@ -135,10 +148,10 @@ function CourseTab() {
       publishCourseData.data.success
     ) {
       toast.success("lecture publish/unpublish successfully !");
-      refetch();
+      getCourseData();
     } else {
       toast.error("Failed to publish/unpublish course!");
-      refetch();
+      getCourseData();
     }
   }
 
@@ -154,15 +167,16 @@ function CourseTab() {
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
           <Button
             disabled={
+              course &&
               course.lectures &&
               Array.isArray(course.lectures) &&
               course.lectures.length === 0
             }
             onClick={() => {
-              handlePublish(course.isPublished ? false : true);
+              handlePublish(!course.isPublished);
             }}
           >
-            {course.isPublished ? "Unpublish" : "Publish"}
+            {course && course.isPublished ? "Unpublish" : "Publish"}
           </Button>
           <Button
             variant="destructive"

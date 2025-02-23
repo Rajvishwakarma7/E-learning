@@ -1,7 +1,8 @@
 import { Course } from "../models/course.model.js";
 import { Lecture } from "../models/lecture.model.js";
 import { deleteCloudinaryMedia, uploadMedia } from "../utils/cloudinary.js";
-import fs from "fs";
+import fs from "fs/promises"; // ✅ Correct way for async operations
+
 export const createCourse = async (req, res) => {
   try {
     const { courseTitle, category } = req.body;
@@ -42,6 +43,7 @@ export const getCreatorCourse = async (req, res) => {
 };
 
 // update course
+
 export const editCourse = async (req, res) => {
   const allowedImageTypes = [
     "image/jpeg",
@@ -60,25 +62,39 @@ export const editCourse = async (req, res) => {
       coursePrice,
     } = req.body;
     const courseThumbnailImg = req.file;
-
     const { courseId } = req.query;
+
     if (!courseId) {
       if (courseThumbnailImg) {
-        fs.unlinkSync(courseThumbnailImg.path);
+        try {
+          await fs.unlink(courseThumbnailImg.path);
+        } catch (err) {
+          console.error("Error deleting file:", err);
+        }
       }
-      return res.status(400).json({ msg: "courseId are required" });
+      return res.status(400).json({ msg: "courseId is required" });
     }
+
     if (
       courseThumbnailImg &&
       !allowedImageTypes.includes(courseThumbnailImg.mimetype)
     ) {
-      fs.unlinkSync(courseThumbnailImg.path);
+      try {
+        await fs.unlink(courseThumbnailImg.path);
+      } catch (err) {
+        console.error("Error deleting file:", err);
+      }
       return res.status(400).json({ msg: "Only Image files are allowed" });
     }
-    let course = await Course.findById({ _id: courseId });
+
+    let course = await Course.findById(courseId);
     if (!course) {
       if (courseThumbnailImg) {
-        fs.unlinkSync(courseThumbnailImg.path);
+        try {
+          await fs.unlink(courseThumbnailImg.path);
+        } catch (err) {
+          console.error("Error deleting file:", err);
+        }
       }
       return res.status(400).json({ msg: "No Course is available" });
     }
@@ -92,28 +108,38 @@ export const editCourse = async (req, res) => {
       coursePrice,
     };
 
-    // for thumbnail
+    // Handle course thumbnail update
     if (courseThumbnailImg) {
       if (course.courseThumbnail) {
         let thumbnailId = course.courseThumbnail.split("/").pop().split(".")[0];
-        await deleteCloudinaryMedia(thumbnailId); // delete old image
+        await deleteCloudinaryMedia(thumbnailId); // Delete old image from Cloudinary
       }
 
-      let courseCloudinaryRes = await uploadMedia(courseThumbnailImg.path); // upload new image
+      let courseCloudinaryRes = await uploadMedia(courseThumbnailImg.path); // Upload new image
       updateCourseData.courseThumbnail = courseCloudinaryRes.secure_url;
+
+      // Delete the uploaded file after successful upload
+      if (courseThumbnailImg?.path) {
+        try {
+          await fs.unlink(courseThumbnailImg.path);
+        } catch (err) {
+          console.error("Error deleting uploaded file:", err);
+        }
+      }
     }
 
     course = await Course.findByIdAndUpdate(courseId, updateCourseData, {
       new: true,
     });
+
     return res
       .status(200)
-      .json({ msg: "course update successfully ", course, success: true });
+      .json({ msg: "Course updated successfully", course, success: true });
   } catch (error) {
-    console.log("EditCourse  ----->>> error", error);
+    console.error("EditCourse ----->>> error:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed to Update Courses",
+      message: "Failed to Update Course",
     });
   }
 };
@@ -219,7 +245,6 @@ export const getCourseLecture = async (req, res) => {
 };
 
 // update lecture title or video
-
 export const updateLecture = async (req, res) => {
   const lectureVideo = req?.file;
   const allowedVideoTypes = [
@@ -234,26 +259,26 @@ export const updateLecture = async (req, res) => {
     const { lectureId } = req.query;
     if (!lectureId || !lectureTitle) {
       if (lectureVideo) {
-        fs.unlinkSync(lectureVideo.path);
+        await fs.unlink(lectureVideo.path);
       }
       return res.status(400).json({ msg: "lectureId or title are required" });
     }
 
     if (lectureVideo && !allowedVideoTypes.includes(lectureVideo.mimetype)) {
-      fs.unlinkSync(lectureVideo.path);
+      await fs.unlink(lectureVideo.path);
       return res.status(400).json({ msg: "Only video files are allowed" });
     }
 
-    let lecture = await Lecture.findById({ _id: lectureId });
+    let lecture = await Lecture.findById(lectureId);
     if (!lecture) {
       if (lectureVideo) {
-        fs.unlinkSync(lectureVideo.path);
+        await fs.unlink(lectureVideo.path);
       }
       return res.status(400).json({ msg: "lecture not found !" });
     }
 
     let updatedLecture = {
-      lectureTitle: lectureTitle,
+      lectureTitle,
       isPreviewFree: isVideoFree,
     };
 
@@ -266,20 +291,21 @@ export const updateLecture = async (req, res) => {
       updatedLecture.publicId = uploadVideo.public_id;
     }
 
-    const upldatedLecture = await Lecture.findByIdAndUpdate(
+    const updatedLectureData = await Lecture.findByIdAndUpdate(
       lectureId,
       updatedLecture,
       { new: true }
     );
+
     return res.status(200).json({
-      upldatedLecture,
+      updatedLecture: updatedLectureData,
       success: true,
-      msg: "lecture upldate successfully !",
+      msg: "Lecture updated successfully!",
     });
   } catch (error) {
-    console.log("update lecture  ----->>> error", error);
+    console.error("Update lecture error:", error);
     if (lectureVideo) {
-      fs.unlinkSync(lectureVideo.path);
+      await fs.unlink(lectureVideo.path);
     }
     return res.status(500).json({
       success: false,
@@ -339,7 +365,7 @@ export const togglePublishCourse = async (req, res) => {
         msg: "course not found !",
       });
     }
-    course.isPublished = isPublish ? true : false;
+    course.isPublished = isPublish;
 
     await course.save();
 
